@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — FoodExpress</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="auth-wrapper">
+    <aside class="auth-art" aria-hidden="true">
+        <h2>Welcome back. Your next favourite meal is a few taps away.</h2>
+        <p>Sign in to reorder your favourites, track deliveries and keep your addresses ready.</p>
+    </aside>
+    <div class="auth-pane">
+    <div class="auth-card">
+        <div class="auth-logo"><img class="auth-brand-logo" src="images/foodexpress-logo.svg" alt=""> <span>FoodExpress</span></div>
+        <p class="auth-subtitle">Sign in to your account</p>
+
+        <div id="alertBox" class="alert-custom"></div>
+
+        <form id="loginForm" novalidate>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Email Address</label>
+                <input type="email" id="email" class="form-control" placeholder="you@example.com" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Password</label>
+                <div class="input-group">
+                    <input type="password" id="password" class="form-control" placeholder="Enter password" required>
+                    <span class="input-group-text toggle-pwd" onclick="togglePwd()">
+                        <i class="bi bi-eye" id="eyeIcon"></i>
+                    </span>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end mb-3">
+                <a href="#" class="text-decoration-none" style="color:var(--primary);font-size:0.875rem">
+                    Forgot password?
+                </a>
+            </div>
+
+            <button type="submit" id="loginBtn" class="btn-primary-custom" data-label="Sign In">
+                Sign In
+            </button>
+        </form>
+
+        <p class="text-center mt-3" style="font-size:0.9rem">
+            Don't have an account?
+            <a href="register.html" class="text-decoration-none fw-semibold" style="color:var(--primary)">Register</a>
+        </p>
+    </div>
+    </div>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+    // Redirect if already logged in
+    if (Auth.isLoggedIn()) Auth.redirectByRole();
+
+    function togglePwd() {
+        const pwd = document.getElementById('password');
+        const icon = document.getElementById('eyeIcon');
+        if (pwd.type === 'password') { pwd.type = 'text'; icon.className = 'bi bi-eye-slash'; }
+        else { pwd.type = 'password'; icon.className = 'bi bi-eye'; }
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email    = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+
+        if (!email || !password) {
+            showAlert('alertBox', 'Please fill in all fields.'); return;
+        }
+
+        setLoading('loginBtn', true);
+        const res = await apiFetch('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ email, password })
+        });
+        setLoading('loginBtn', false);
+
+        if (res?.ok) {
+            Auth.save(res.data.data);
+            showAlert('alertBox', 'Login successful! Redirecting...', 'success');
+            setTimeout(() => Auth.redirectByRole(), 800);
+        } else {
+            showAlert('alertBox', res?.data?.message || 'Login failed. Check credentials.');
+        }
+    });
+</script>
+</body>
+</html>

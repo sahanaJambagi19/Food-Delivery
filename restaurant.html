@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurant — FoodExpress</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav class="navbar sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="index.html"><img class="brand-logo" src="images/foodexpress-logo.svg" alt=""> <span>FoodExpress</span></a>
+        <a href="cart.html" class="btn btn-outline-warning position-relative" aria-label="Open cart">
+            <i class="bi bi-bag"></i>
+            <span id="cartCount" class="position-absolute top-0 start-100 translate-middle badge rounded-pill">0</span>
+        </a>
+    </div>
+</nav>
+
+<div id="restaurantHeader"><div class="banner"></div></div>
+
+<div class="container pb-5" style="max-width:1200px">
+    <div class="row g-4">
+        <!-- Menu -->
+        <div class="col-lg-8">
+            <div id="alertBox" class="alert-custom mt-3"></div>
+            <div class="menu-bar">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="cat-rail flex-grow-1" id="categoryTabs"></div>
+                    <div class="form-check form-switch mb-0 text-nowrap">
+                        <input class="form-check-input" type="checkbox" id="vegOnly" onchange="toggleVeg(this.checked)">
+                        <label class="form-check-label small fw-semibold" for="vegOnly">Veg only</label>
+                    </div>
+                </div>
+            </div>
+            <div id="menuItems" class="mt-2"></div>
+        </div>
+
+        <!-- Cart -->
+        <div class="col-lg-4 d-none" id="cartCol">
+            <div class="cart-side mt-lg-4" id="cartSummary">
+                <h2 class="h5 fw-bold mb-0">Your order</h2>
+                <small class="text-muted d-block mb-3" id="cartFrom"></small>
+                <div id="cartItemsList"></div>
+                <hr>
+                <div class="d-flex justify-content-between fw-bold fs-5 mb-3"><span>Subtotal</span><span id="cartSubtotal">₹0</span></div>
+                <a href="cart.html" class="btn btn-lime w-100 py-2">Go to checkout</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<a href="cart.html" class="mobile-cart d-none d-lg-none" id="mobileCart">
+    <span id="mobileCartText">0 items</span><span>View cart <i class="bi bi-arrow-right-short"></i></span>
+</a>
+
+<!-- Conflict Modal -->
+<div class="modal fade" id="conflictModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0"><h5 class="modal-title">Start a new cart?</h5></div>
+            <div class="modal-body">Your cart has dishes from another restaurant, and you can order from one restaurant at a time. Clear the cart and add this dish?</div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Keep my cart</button>
+                <button class="btn btn-lime" onclick="clearAndAdd()">Clear cart and add</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/app.js"></script>
+<script>
+    const params = new URLSearchParams(location.search);
+    const restaurantId = params.get('id');
+    let pendingItem = null, conflictModal;
+    let categories = [], items = [], cartMap = {}, restOpen = true, vegOnly = false;
+
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const money = n => '₹' + Number(n || 0);
+    const FOOD_FALLBACK = "this.onerror=null;this.src='images/default-food.svg'";
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        if (!restaurantId) { location.href = 'index.html'; return; }
+        conflictModal = new bootstrap.Modal(document.getElementById('conflictModal'));
+        await loadRestaurant();
+        await loadMenu();
+        if (Auth.isLoggedIn()) await loadCart();
+    });
+
+    async function loadRestaurant() {
+        const res = await apiFetch(`/restaurants/${restaurantId}`);
+        if (!res?.ok) { location.href = 'index.html'; return; }
+        const r = res.data.data;
+        restOpen = r.open;
+        document.title = r.name + ' — FoodExpress';
+        const cover = !FoodImages.isPlaceholder(r.coverImageUrl) ? r.coverImageUrl : FoodImages.restaurant(r.name, r.cuisineType);
+        const logo = !FoodImages.isPlaceholder(r.logoUrl) ? r.logoUrl : FoodImages.logo(r.name);
+        const fee = Number(r.deliveryCharge) === 0 ? 'Free delivery' : money(r.deliveryCharge) + ' delivery';
+        document.getElementById('restaurantHeader').innerHTML = `
+            <div class="banner" style="background-image:url('${esc(cover)}'), url('images/default-restaurant.svg')"></div>
+            <div class="container" style="max-width:1200px"><div class="info-card">
+                <div class="d-flex align-items-center gap-3">
+                    <img class="logo" src="${esc(logo)}" alt="" onerror="this.onerror=null;this.src='${FoodImages.logo(r.name)}'">
+                    <div class="flex-grow-1">
+                        <h1>${esc(r.name)}</h1>
+                        <div class="text-muted">${esc(r.cuisineType || '')}</div>
+                    </div>
+                    <span class="chip ${r.open ? 'open' : 'shut'} d-none d-sm-inline-flex">${r.open ? 'Open now' : 'Closed'}</span>
+                </div>
+                <p class="text-muted mt-3 mb-2">${esc(r.description || '')}</p>
+                <div class="d-flex flex-wrap gap-2">
+                    <span class="chip gold"><i class="bi bi-star-fill"></i>${Number(r.avgRating || 0).toFixed(1)} <span class="fw-normal">(${r.totalRatings || 0} ratings)</span></span>
+                    <span class="chip"><i class="bi bi-clock"></i>${r.avgDeliveryTime} min</span>
+                    <span class="chip"><i class="bi bi-scooter"></i>${fee}</span>
+                    ${Number(r.minOrderAmount) > 0 ? `<span class="chip"><i class="bi bi-receipt"></i>${money(r.minOrderAmount)} minimum</span>` : ''}
+                    <span class="chip"><i class="bi bi-geo-alt"></i>${esc(r.address || r.city)}</span>
+                </div>
+            </div></div>`;
+    }
+
+    async function loadMenu() {
+        const [catRes, itemRes] = await Promise.all([
+            apiFetch(`/restaurants/${restaurantId}/categories`),
+            apiFetch(`/restaurants/${restaurantId}/food-items`)
+        ]);
+        const menu = document.getElementById('menuItems');
+        if (!catRes?.ok || !itemRes?.ok) {
+            menu.innerHTML = `<div class="state-panel"><span class="emoji">⚠️</span><h6>The menu didn’t load</h6>
+                <p class="mb-3">Check that the backend is running, then try again.</p>
+                <button class="btn btn-lime" onclick="loadMenu()">Try again</button></div>`;
+            return;
+        }
+        categories = catRes.data.data;
+        items = itemRes.data.data;
+        renderMenu();
+    }
+
+    function toggleVeg(v) { vegOnly = v; renderMenu(); }
+
+    function renderMenu() {
+        const menu = document.getElementById('menuItems');
+        const sections = categories.map(cat => ({ cat, list: items.filter(i => i.categoryId === cat.id && (!vegOnly || i.veg)) }))
+                                   .filter(s => s.list.length);
+        if (!sections.length) {
+            menu.innerHTML = `<div class="state-panel"><span class="emoji">🥗</span><h6>Nothing to show</h6><p class="mb-0">${vegOnly
+                ? 'This restaurant has no vegetarian dishes listed. Turn off “Veg only” to see the full menu.' : 'This menu is empty for now.'}</p></div>`;
+            document.getElementById('categoryTabs').innerHTML = '';
+            return;
+        }
+        document.getElementById('categoryTabs').innerHTML = sections.map((s, i) =>
+            `<button class="cat-pill ${i === 0 ? 'active' : ''}" data-cat="${s.cat.id}" onclick="goToCategory('${s.cat.id}')">${esc(s.cat.name)}</button>`).join('');
+
+        menu.innerHTML = sections.map(({ cat, list }) => `
+            <section class="category-section" id="cat-${cat.id}" data-cat="${cat.id}">
+                <h2>${esc(cat.name)} <span class="text-muted fw-normal fs-6">(${list.length})</span></h2>
+                ${list.map(item => {
+                    const photo = !FoodImages.isPlaceholder(item.imageUrl) ? item.imageUrl : FoodImages.url(item.name);
+                    return `
+                <article class="dish ${item.available ? '' : 'off'}">
+                    <div>
+                        <span class="veg-mark ${item.veg ? '' : 'nonveg'}" title="${item.veg ? 'Vegetarian' : 'Non-vegetarian'}"></span>
+                        <h3>${esc(item.name)}</h3>
+                        <p class="desc">${esc(item.description || '')}</p>
+                        <span class="price">${money(item.price)}</span>
+                    </div>
+                    <div class="dish-media">
+                        <img src="${esc(photo)}" alt="" loading="lazy" onerror="${FOOD_FALLBACK}">
+                        <div class="ctl" id="ctl-${item.id}"></div>
+                    </div>
+                </article>`;
+                }).join('')}
+            </section>`).join('');
+        paintControls();
+        observeSections();
+    }
+
+    function controlHtml(item) {
+        if (!restOpen) return `<button class="add-btn" disabled>Closed</button>`;
+        if (!item.available) return `<button class="add-btn" disabled>Unavailable</button>`;
+        const e = cartMap[item.id];
+        if (!e) return `<button class="add-btn" onclick="addToCart(${item.id})">Add</button>`;
+        return `<div class="stepper"><button aria-label="Remove one" onclick="changeQty(${item.id}, ${e.qty - 1})">&minus;</button><span>${e.qty}</span><button aria-label="Add one" onclick="changeQty(${item.id}, ${e.qty + 1})">+</button></div>`;
+    }
+
+    function paintControls() {
+        items.forEach(item => {
+            const el = document.getElementById('ctl-' + item.id);
+            if (el) el.innerHTML = controlHtml(item);
+        });
+    }
+
+    function goToCategory(id) { document.getElementById('cat-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+    let observer;
+    function observeSections() {
+        observer?.disconnect();
+        observer = new IntersectionObserver(entries => {
+            entries.forEach(e => {
+                if (!e.isIntersecting) return;
+                const id = e.target.dataset.cat;
+                document.querySelectorAll('.cat-pill').forEach(p => p.classList.toggle('active', p.dataset.cat === id));
+            });
+        }, { rootMargin: '-160px 0px -65% 0px' });
+        document.querySelectorAll('.category-section').forEach(s => observer.observe(s));
+    }
+
+    async function addToCart(foodItemId) {
+        if (!Auth.isLoggedIn()) { location.href = 'login.html'; return; }
+        const res = await apiFetch('/cart/items', { method: 'POST', body: JSON.stringify({ foodItemId, quantity: 1 }) });
+        if (res?.ok) await loadCart();
+        else if (res?.data?.message?.toLowerCase().includes('another restaurant')) { pendingItem = foodItemId; conflictModal.show(); }
+        else showAlert('alertBox', res?.data?.message || 'Couldn’t add this dish. Try again.');
+    }
+
+    async function changeQty(foodItemId, qty) {
+        const e = cartMap[foodItemId];
+        if (!e) return addToCart(foodItemId);
+        const res = await apiFetch(`/cart/items/${e.cartItemId}?quantity=${Math.max(0, Math.min(20, qty))}`, { method: 'PUT' });
+        if (res?.ok) await loadCart();
+        else showAlert('alertBox', res?.data?.message || 'Couldn’t update the quantity.');
+    }
+
+    async function clearAndAdd() {
+        conflictModal.hide();
+        await apiFetch('/cart', { method: 'DELETE' });
+        await addToCart(pendingItem);
+        pendingItem = null;
+    }
+
+    async function loadCart() {
+        const res = await apiFetch('/cart');
+        if (!res?.ok) return;
+        const cart = res.data.data;
+        cartMap = {};
+        (cart.items || []).forEach(i => { cartMap[i.foodItemId] = { cartItemId: i.cartItemId, qty: i.quantity }; });
+        document.getElementById('cartCount').textContent = cart.totalItems;
+        paintControls();
+
+        const has = cart.totalItems > 0;
+        document.getElementById('cartCol').classList.toggle('d-none', !has);
+        document.getElementById('mobileCart').classList.toggle('d-none', !has);
+        document.body.classList.toggle('has-cart', has);
+        if (!has) return;
+        document.getElementById('cartFrom').textContent = cart.restaurantName ? 'from ' + cart.restaurantName : '';
+        document.getElementById('cartSubtotal').textContent = money(cart.subtotal);
+        document.getElementById('mobileCartText').textContent = `${cart.totalItems} ${cart.totalItems === 1 ? 'item' : 'items'} — ${money(cart.subtotal)}`;
+        document.getElementById('cartItemsList').innerHTML = cart.items.map(i => `
+            <div class="cart-row">
+                <span class="flex-grow-1">${esc(i.foodItemName)}</span>
+                <div class="stepper sm"><button aria-label="Remove one" onclick="changeQty(${i.foodItemId}, ${i.quantity - 1})">&minus;</button><span>${i.quantity}</span><button aria-label="Add one" onclick="changeQty(${i.foodItemId}, ${i.quantity + 1})">+</button></div>
+                <span style="min-width:60px;text-align:right">${money(i.subtotal)}</span>
+            </div>`).join('');
+    }
+</script>
+</body>
+</html>

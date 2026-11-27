@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FoodExpress — Order Food Online</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-custom sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="index.html">
+            <img class="brand-logo" src="images/foodexpress-logo.svg" alt=""> <span>FoodExpress</span>
+        </a>
+        <div class="d-flex align-items-center gap-2 gap-md-3 ms-auto">
+            <div id="searchBox" class="d-none d-md-block">
+                <input type="search" id="searchInput" class="form-control" placeholder="Search restaurants"
+                       aria-label="Search restaurants" style="width:260px" oninput="debounceSearch(this.value)">
+            </div>
+            <span id="cartBadge" class="d-none">
+                <a href="cart.html" class="btn btn-outline-warning position-relative" aria-label="Open cart">
+                    <i class="bi bi-bag"></i>
+                    <span id="cartCount" class="position-absolute top-0 start-100 translate-middle badge rounded-pill">0</span>
+                </a>
+            </span>
+            <div id="authButtons">
+                <a href="login.html" class="btn btn-outline-secondary btn-sm me-1">Log in</a>
+                <a href="register.html" class="btn btn-sm">Sign up</a>
+            </div>
+            <div id="userMenu" class="d-none dropdown">
+                <button class="btn btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="bi bi-person-circle me-1"></i><span id="userName"></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="orders.html"><i class="bi bi-bag me-2"></i>My orders</a></li>
+                    <li><a class="dropdown-item" href="profile.html"><i class="bi bi-person me-2"></i>Profile and addresses</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item text-danger" href="#" onclick="logout()">
+                        <i class="bi bi-box-arrow-right me-2"></i>Log out</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- Hero -->
+<header class="hero">
+    <div class="container">
+        <h1>Good food.<br>Great mood.</h1>
+        <p class="lead" id="heroSub">Your favourite meals from the best kitchens in town, delivered hot to your door.</p>
+        <form class="hero-search" onsubmit="event.preventDefault(); doSearch()">
+            <input type="search" id="heroSearch" placeholder="Search biryani, pizza, dosa…" aria-label="Search restaurants or dishes"
+                   oninput="debounceSearch(this.value)">
+            <button type="submit">Search</button>
+        </form>
+        <div class="hero-perks">
+            <span><i class="bi bi-clock-history"></i>About 30 minutes</span>
+            <span><i class="bi bi-patch-check-fill"></i>Hand-picked kitchens</span>
+            <span><i class="bi bi-credit-card-2-front"></i>Pay online or on delivery</span>
+        </div>
+    </div>
+</header>
+
+<!-- Cuisine rail -->
+<div class="container rail-wrap" style="max-width:1200px">
+    <div class="rail" id="rail" role="list"></div>
+</div>
+
+<!-- Restaurants -->
+<main class="container my-4" style="max-width:1200px">
+    <div class="section-head">
+        <div>
+            <h2 id="sectionTitle">Popular near you</h2>
+            <small id="sectionCount"></small>
+        </div>
+        <select class="form-select form-select-sm w-auto" id="sortSelect" onchange="sortRestaurants(this.value)" aria-label="Sort restaurants">
+            <option value="rating">Top rated</option>
+            <option value="delivery">Fastest delivery</option>
+            <option value="fee">Lowest delivery fee</option>
+        </select>
+    </div>
+
+    <div id="restaurantGrid" class="row g-4"></div>
+
+    <div class="text-center mt-5 d-none" id="loadMoreBtn">
+        <button class="btn btn-outline-secondary px-4" onclick="loadMore()">Show more restaurants</button>
+    </div>
+</main>
+
+<footer class="site-footer">
+    <div class="container" style="max-width:1200px">
+        <div class="d-flex flex-wrap justify-content-between align-items-end gap-3">
+            <div>
+                <div class="brand">food<b>express</b></div>
+                <p class="mb-0 mt-1">Fresh food from kitchens you’ll love, delivered to your door.</p>
+            </div>
+            <div class="d-flex gap-4">
+                <a href="orders.html">My orders</a><a href="profile.html">Profile</a><a href="register.html">Become a partner</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/app.js"></script>
+<script>
+    const PAGE_SIZE = 50;
+    const CUISINES = [
+        { label: 'All',          key: '',             emoji: '🍽️' },
+        { label: 'North Indian', key: 'North Indian', emoji: '🍛' },
+        { label: 'South Indian', key: 'South Indian', emoji: '🥞' },
+        { label: 'Chinese',      key: 'Chinese',      emoji: '🥡' },
+        { label: 'Italian',      key: 'Italian',      emoji: '🍕' },
+        { label: 'Fast food',    key: 'Fast Food',    emoji: '🍔' },
+        { label: 'Biryani',      key: 'Biryani',      emoji: '🍚' },
+        { label: 'Desserts',     key: 'Desserts',     emoji: '🍰' },
+        { label: 'Chaat',        key: 'Chaat',        emoji: '🥟' },
+        { label: 'Healthy',      key: 'Healthy',      emoji: '🥗' },
+        { label: 'Cafe',         key: 'Cafe',         emoji: '☕' }
+    ];
+
+    let restaurants = [], currentPage = 0, isLastPage = true, searchQuery = '', activeCuisine = '', sortBy = 'rating';
+    let searchTimer = null, requestId = 0;
+
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const IMG_FALLBACK = "this.onerror=null;this.src='images/default-restaurant.svg'";
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initNav();
+        renderRail();
+        loadRestaurants();
+        if (Auth.isLoggedIn()) loadCartCount();
+    });
+
+    function initNav() {
+        if (Auth.isLoggedIn()) {
+            document.getElementById('authButtons').classList.add('d-none');
+            document.getElementById('userMenu').classList.remove('d-none');
+            document.getElementById('cartBadge').classList.remove('d-none');
+            document.getElementById('userName').textContent = Auth.getName();
+        }
+    }
+
+    async function loadCartCount() {
+        const res = await apiFetch('/cart');
+        if (res?.ok) document.getElementById('cartCount').textContent = res.data.data.totalItems || 0;
+    }
+
+    function renderRail() {
+        document.getElementById('rail').innerHTML = CUISINES.map(c => `
+            <button type="button" class="cuisine ${c.key === activeCuisine ? 'active' : ''}" role="listitem" onclick="pickCuisine('${c.key}')">
+                <span class="face">${c.emoji}</span>${c.label}
+            </button>`).join('');
+    }
+
+    function pickCuisine(key) {
+        activeCuisine = key; searchQuery = key;
+        document.getElementById('heroSearch').value = '';
+        document.getElementById('searchInput').value = '';
+        renderRail();
+        loadRestaurants();
+    }
+
+    function skeletons() {
+        return Array.from({ length: 6 }, () => `
+            <div class="col-sm-6 col-lg-4"><div class="sk-card">
+                <div class="img skeleton"></div><div class="l skeleton"></div><div class="l short skeleton"></div>
+            </div></div>`).join('');
+    }
+
+    async function loadRestaurants(reset = true) {
+        const grid = document.getElementById('restaurantGrid');
+        if (reset) { currentPage = 0; restaurants = []; grid.innerHTML = skeletons(); }
+        const myRequest = ++requestId;
+
+        const url = searchQuery
+            ? `/restaurants/search?q=${encodeURIComponent(searchQuery)}&page=${currentPage}&size=${PAGE_SIZE}`
+            : `/restaurants?page=${currentPage}&size=${PAGE_SIZE}`;
+        const res = await apiFetch(url);
+        if (myRequest !== requestId) return;              // a newer search replaced this request
+
+        if (!res?.ok) { showError(res); return; }
+        const data = res.data.data;
+        restaurants = restaurants.concat(data.content);
+        isLastPage = data.last;
+        document.getElementById('loadMoreBtn').classList.toggle('d-none', isLastPage);
+        document.getElementById('sectionTitle').textContent =
+            activeCuisine ? `${activeCuisine} restaurants` : (searchQuery ? `Results for “${searchQuery}”` : 'Popular near you');
+        document.getElementById('sectionCount').textContent =
+            `${data.totalElements} ${data.totalElements === 1 ? 'restaurant' : 'restaurants'} delivering now`;
+        renderRestaurants();
+    }
+
+    function showError(res) {
+        const offline = !res || res.status === 0;
+        document.getElementById('loadMoreBtn').classList.add('d-none');
+        document.getElementById('restaurantGrid').innerHTML = `
+            <div class="col-12"><div class="state-panel">
+                <span class="emoji">⚠️</span>
+                <h6>${offline ? 'Can’t reach the server' : 'Restaurants didn’t load'}</h6>
+                <p class="mb-3">${esc(res?.data?.message || (offline
+                    ? 'Make sure the backend is running on http://localhost:8080, then try again.'
+                    : 'Something went wrong on the server.'))}</p>
+                <button class="btn btn-lime" onclick="loadRestaurants()">Try again</button>
+            </div></div>`;
+    }
+
+    function sorted() {
+        const list = restaurants.slice();
+        if (sortBy === 'delivery') list.sort((a, b) => (a.avgDeliveryTime ?? 99) - (b.avgDeliveryTime ?? 99));
+        else if (sortBy === 'fee') list.sort((a, b) => Number(a.deliveryCharge) - Number(b.deliveryCharge));
+        else list.sort((a, b) => Number(b.avgRating) - Number(a.avgRating));
+        return list;
+    }
+
+    function renderRestaurants() {
+        const grid = document.getElementById('restaurantGrid');
+        if (!restaurants.length) {
+            grid.innerHTML = `<div class="col-12"><div class="state-panel">
+                <span class="emoji">🔎</span><h6>No restaurants match “${esc(searchQuery)}”</h6>
+                <p class="mb-3">Try another cuisine or a shorter search.</p>
+                <button class="btn btn-outline-secondary" onclick="pickCuisine('')">Show all restaurants</button></div></div>`;
+            return;
+        }
+        grid.innerHTML = sorted().map(r => {
+            const photo = !FoodImages.isPlaceholder(r.coverImageUrl) ? r.coverImageUrl : FoodImages.restaurant(r.name, r.cuisineType);
+            const free = Number(r.deliveryCharge) === 0;
+            return `
+            <div class="col-sm-6 col-lg-4">
+                <a class="r-card ${r.open ? '' : 'closed'}" href="restaurant.html?id=${r.id}">
+                    <div class="r-media">
+                        <img src="${esc(photo)}" alt="" loading="lazy" onerror="${IMG_FALLBACK}">
+                        ${free ? '<span class="pill free">Free delivery</span>' : ''}
+                        ${r.open ? '' : '<span class="closed-tag">Closed</span>'}
+                        <span class="pill time"><i class="bi bi-clock"></i>${r.avgDeliveryTime ?? '--'} min</span>
+                        <span class="pill rating"><i class="bi bi-star-fill"></i>${Number(r.avgRating || 0).toFixed(1)}</span>
+                    </div>
+                    <div class="r-body">
+                        <h3 class="r-name">${esc(r.name)}</h3>
+                        <p class="r-meta">${esc(r.cuisineType || 'Multi-cuisine')}</p>
+                        <div class="r-sub">
+                            <span><i class="bi bi-geo-alt"></i>${esc(r.city)}</span>
+                            ${Number(r.minOrderAmount) > 0 ? `<span><i class="bi bi-receipt"></i>Min ₹${Number(r.minOrderAmount)}</span>` : ''}
+                            ${free ? '' : `<span><i class="bi bi-scooter"></i>₹${Number(r.deliveryCharge)} delivery</span>`}
+                        </div>
+                    </div>
+                </a>
+            </div>`;
+        }).join('');
+    }
+
+    function debounceSearch(val) {
+        // keep both search boxes in sync
+        document.getElementById('heroSearch').value = val;
+        document.getElementById('searchInput').value = val;
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            searchQuery = val.trim(); activeCuisine = '';
+            renderRail();
+            loadRestaurants();
+        }, 400);
+    }
+
+    function doSearch() { debounceSearch(document.getElementById('heroSearch').value); }
+    function loadMore() { currentPage++; loadRestaurants(false); }
+    function sortRestaurants(val) { sortBy = val; renderRestaurants(); }
+
+    async function logout() {
+        const rt = localStorage.getItem('refreshToken');
+        if (rt) await apiFetch('/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken: rt }) });
+        Auth.clear();
+        window.location.reload();
+    }
+</script>
+</body>
+</html>
