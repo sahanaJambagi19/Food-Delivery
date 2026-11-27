@@ -9,7 +9,7 @@ Roles: **Customer, Restaurant Owner, Delivery Partner, Admin**.
 - Java 21 (JDK)
 - Maven 3.9+
 - MySQL 8, or Docker Desktop with Docker Compose
-- Python 3 (only for the lightweight local frontend server)
+  
 
 ## Project layout
 
